@@ -20,14 +20,36 @@ STATUSES = ["待投用", "运行中", "待清洗", "已更换"]
 def list_entries(
     keyword: str | None = Query(default=None, description="按膜组编号检索"),
     status: str | None = Query(default=None, description="待投用、运行中、待清洗、已更换"),
+    model: str | None = Query(default=None, alias="膜型号", description="按膜型号检索"),
+    area: str | None = Query(default=None, alias="膜面积", description="按膜面积检索"),
     page: int = 1,
     size: int = 20,
 ) -> PageResult[dict]:
     """按膜组编号与状态过滤膜组件列表；没有数据时返回空页，不报错。"""
     if size > 200:
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
-    items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
+    items, total = service.list_entries(
+        keyword=keyword, status=status, model=model, area=area, page=page, size=size
+    )
     return PageResult(items=items, total=total, page=page, size=size)
+
+
+@router.get("/stats")
+def stats_entries(
+    keyword: str | None = Query(default=None, description="按膜组编号检索"),
+    status: str | None = Query(default=None, description="待投用、运行中、待清洗、已更换"),
+    model: str | None = Query(default=None, alias="膜型号", description="按膜型号检索"),
+    area: str | None = Query(default=None, alias="膜面积", description="按膜面积检索"),
+) -> dict[str, Any]:
+    """统计卡片：与列表共用筛选条件，保证卡片数字和列表对得上。"""
+    return service.stats(keyword=keyword, status=status, model=model, area=area)
+
+
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出膜组件清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "membrane", "total": total, "items": items}
 
 
 @router.get("/{entry_id}", response_model=dict)
@@ -56,10 +78,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出膜组件清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "membrane", "total": total, "items": items}
